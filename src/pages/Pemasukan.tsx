@@ -152,6 +152,7 @@ const Pemasukan = () => {
   const [memberDropdownOpen, setMemberDropdownOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [formAmount, setFormAmount] = useState<number>(100000);
+  const formAmountRef = useRef<number>(100000);
   const [downloadingProofId, setDownloadingProofId] = useState<string | null>(null);
   const [importFile, setImportFile] = useState<File | null>(null);
   const [importing, setImporting] = useState(false);
@@ -159,6 +160,11 @@ const Pemasukan = () => {
   const [noteItems, setNoteItems] = useState<IncomeNoteItemInput[]>([{ text: "", amount: "", month: "", year: "" }]);
   const memberDropdownRef = useRef<HTMLDivElement>(null);
   const canManagePemasukan = role === "admin";
+
+  // Sync formAmountRef setiap kali formAmount berubah agar tidak stale di event handler mobile
+  useEffect(() => {
+    formAmountRef.current = formAmount;
+  }, [formAmount]);
 
   useEffect(() => {
     const handler = (e: MouseEvent) => {
@@ -453,16 +459,20 @@ const Pemasukan = () => {
 
   const updateNoteAmount = (index: number, value: string) => {
     const numeric = value.replace(/[^0-9]/g, "");
-    const filledAmount = Number(numeric) || 0;
-    const total = formAmount;
+    // Gunakan ref agar selalu dapat nilai formAmount terbaru di mobile (hindari stale closure)
+    const total = formAmountRef.current;
 
     setNoteItems((prev) => {
       const next = prev.map((item, idx) => (idx === index ? { ...item, amount: numeric } : item));
-      // Auto-fill the other item when exactly 2 items
-      if (next.length === 2 && total > 0) {
-        const otherIdx = index === 0 ? 1 : 0;
-        const remainder = Math.max(0, total - filledAmount);
-        next[otherIdx] = { ...next[otherIdx], amount: String(remainder) };
+      const lastIdx = next.length - 1;
+      // Auto-fill item terakhir dengan sisa (total - jumlah semua item lainnya)
+      // berlaku untuk 2, 3, atau lebih keterangan, selama yang diubah bukan item terakhir
+      if (next.length >= 2 && total > 0 && index !== lastIdx) {
+        const sumOthers = next
+          .slice(0, lastIdx)
+          .reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
+        const remainder = Math.max(0, total - sumOthers);
+        next[lastIdx] = { ...next[lastIdx], amount: String(remainder) };
       }
       return next;
     });

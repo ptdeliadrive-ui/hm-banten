@@ -14,6 +14,37 @@ import { formatCurrency } from "@/lib/store";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
+const MONTHS_ID = [
+  "Januari",
+  "Februari",
+  "Maret",
+  "April",
+  "Mei",
+  "Juni",
+  "Juli",
+  "Agustus",
+  "September",
+  "Oktober",
+  "November",
+  "Desember",
+];
+
+function getKeteranganTemplate(type: SPMNumberType, month: number, year: number): string {
+  const safeMonth = Number.isFinite(month) && month >= 1 && month <= 12 ? month : 1;
+  const safeYear = Number.isFinite(year) ? year : new Date().getFullYear();
+  const bulan = MONTHS_ID[safeMonth - 1].toUpperCase();
+
+  if (type === "TF") {
+    return `OPERASIONAL TRANSPORT FEE BULAN ${bulan} ${safeYear}`;
+  }
+
+  if (type === "OPRASIONAL") {
+    return `OPERASIONAL KANTOR BULAN ${bulan} ${safeYear}`;
+  }
+
+  return "";
+}
+
 interface Props {
   existingSPMs: SPMDocument[];
   editSPM?: SPMDocument;
@@ -50,10 +81,23 @@ export default function SPMForm({ existingSPMs, editSPM, onSave, onCancel }: Pro
   const [manageOpen, setManageOpen] = useState(false);
   const [newKategori, setNewKategori] = useState('');
   const [importing, setImporting] = useState(false);
+  const parsedTanggal = useMemo(() => {
+    const d = new Date(editSPM?.tanggal || new Date().toISOString());
+    if (Number.isNaN(d.getTime())) return new Date();
+    return d;
+  }, [editSPM?.tanggal]);
+  const [keteranganBulan, setKeteranganBulan] = useState<number>(editSPM?.keteranganBulan || (parsedTanggal.getMonth() + 1));
+  const [keteranganTahun, setKeteranganTahun] = useState<number>(editSPM?.keteranganTahun || parsedTanggal.getFullYear());
   const nomorSPMOtomatis = useMemo(() => {
     if (editSPM) return editSPM.nomorSPM;
     return generateSPMNumberNew(existingSPMs, tanggal, nomorType);
   }, [editSPM, existingSPMs, tanggal, nomorType]);
+
+  const isKeteranganWajib = nomorType === "TF" || nomorType === "OPRASIONAL";
+  const generatedKeterangan = useMemo(
+    () => getKeteranganTemplate(nomorType, keteranganBulan, keteranganTahun),
+    [nomorType, keteranganBulan, keteranganTahun],
+  );
 
   useEffect(() => {
     if (!editSPM && !isManualNumber) {
@@ -191,6 +235,11 @@ export default function SPMForm({ existingSPMs, editSPM, onSave, onCancel }: Pro
       return;
     }
 
+    if (isKeteranganWajib && (!keteranganBulan || !keteranganTahun || !generatedKeterangan)) {
+      alert('Keterangan SPM wajib terisi untuk jenis TF atau OPRASIONAL');
+      return;
+    }
+
     const duplicate = existingSPMs.some((spm) => spm.id !== editSPM?.id && spm.nomorSPM.trim().toLowerCase() === nomorSPM.toLowerCase());
     if (duplicate) {
       alert('Nomor SPM sudah digunakan. Gunakan nomor lain.');
@@ -207,6 +256,9 @@ export default function SPMForm({ existingSPMs, editSPM, onSave, onCancel }: Pro
       tujuan,
       lokasi,
       kategori,
+      keteranganHeader: isKeteranganWajib ? generatedKeterangan : (editSPM?.keteranganHeader || ''),
+      keteranganBulan: isKeteranganWajib ? keteranganBulan : undefined,
+      keteranganTahun: isKeteranganWajib ? keteranganTahun : undefined,
       items,
       total,
       status: editSPM?.status || 'draft',
@@ -238,6 +290,38 @@ export default function SPMForm({ existingSPMs, editSPM, onSave, onCancel }: Pro
                 </SelectContent>
               </Select>
             </div>
+            {isKeteranganWajib && (
+              <div className="space-y-2 md:col-span-2">
+                <Label>Keterangan Header SPM</Label>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+                  <Select
+                    value={String(keteranganBulan)}
+                    onValueChange={(v) => setKeteranganBulan(Number(v) || 1)}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Pilih bulan" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {MONTHS_ID.map((m, i) => (
+                        <SelectItem key={m} value={String(i + 1)}>{m}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <Input
+                    type="number"
+                    min={2000}
+                    max={2100}
+                    value={keteranganTahun}
+                    onChange={(e) => setKeteranganTahun(Number(e.target.value) || new Date().getFullYear())}
+                    placeholder="Tahun"
+                  />
+                  <Input value={generatedKeterangan} readOnly className="font-semibold" />
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Keterangan ini akan tampil di bawah judul SURAT PERINTAH MEMBAYAR (SPM).
+                </p>
+              </div>
+            )}
             <div className="space-y-2">
               <Label>No SPM</Label>
               {!editSPM && (

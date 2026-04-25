@@ -96,6 +96,9 @@ export interface SPMDocument {
   tujuan: string;
   lokasi: string;
   kategori: string;
+  keteranganHeader?: string;
+  keteranganBulan?: number;
+  keteranganTahun?: number;
   items: SPMLineItem[];
   total: number;
   status: SPMStatus;
