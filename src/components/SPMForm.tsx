@@ -8,7 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Plus, Trash2, Save, Settings2, Upload, Download } from "lucide-react";
-import { type SPMDocument, type SPMLineItem, type SavedAccount, type SPMNumberType, BANK_CODES, SPM_NUMBER_TYPES, getSPMCategories, saveSPMCategories, generateSPMNumberNew, inferSPMNumberType } from "@/lib/spm-store";
+import { type SPMDocument, type SPMLineItem, type SavedAccount, type SPMNumberType, BANK_CODES, SPM_NUMBER_TYPES, SPM_CATEGORIES_DEFAULT, generateSPMNumberNew, inferSPMNumberType } from "@/lib/spm-store";
 import { downloadSPMItemsTemplate, parseSPMItemsExcel } from "@/lib/excel-parser";
 import { formatCurrency } from "@/lib/store";
 import { supabase } from "@/integrations/supabase/client";
@@ -77,10 +77,11 @@ export default function SPMForm({ existingSPMs, editSPM, onSave, onCancel }: Pro
   const [manualNomorSPM, setManualNomorSPM] = useState("");
   const [items, setItems] = useState<SPMLineItem[]>(editSPM?.items || [emptyItem(editSPM?.kategori || 'Operasional Kantor')]);
   const [savedAccounts, setSavedAccounts] = useState<SavedAccount[]>([]);
-  const [categories, setCategories] = useState<string[]>(() => getSPMCategories());
+  const [categories, setCategories] = useState<string[]>([...SPM_CATEGORIES_DEFAULT]);
   const [manageOpen, setManageOpen] = useState(false);
   const [newKategori, setNewKategori] = useState('');
   const [importing, setImporting] = useState(false);
+  const [savingCategory, setSavingCategory] = useState(false);
   const parsedTanggal = useMemo(() => {
     const d = new Date(editSPM?.tanggal || new Date().toISOString());
     if (Number.isNaN(d.getTime())) return new Date();
@@ -122,6 +123,42 @@ export default function SPMForm({ existingSPMs, editSPM, onSave, onCancel }: Pro
     };
 
     void loadAccounts();
+
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+
+    const loadCategories = async () => {
+      const { data, error } = await supabase
+        .from("spm_categories")
+        .select("name")
+        .order("name", { ascending: true });
+
+      if (!active) return;
+
+      if (error) {
+        toast.error("Gagal mengambil kategori dari server");
+        setCategories([...SPM_CATEGORIES_DEFAULT]);
+        return;
+      }
+
+      const list = (data || [])
+        .map((row) => row.name?.trim())
+        .filter((name): name is string => Boolean(name));
+
+      if (list.length === 0) {
+        setCategories([...SPM_CATEGORIES_DEFAULT]);
+        return;
+      }
+
+      setCategories(Array.from(new Set(list)));
+    };
+
+    void loadCategories();
 
     return () => {
       active = false;
@@ -267,6 +304,59 @@ export default function SPMForm({ existingSPMs, editSPM, onSave, onCancel }: Pro
       createdAt: editSPM?.createdAt || new Date().toISOString(),
     };
     onSave(spm);
+  };
+
+  const handleAddCategory = async () => {
+    const trimmed = newKategori.trim();
+    if (!trimmed) return;
+
+    const exists = categories.some((c) => c.toLowerCase() === trimmed.toLowerCase());
+    if (exists) {
+      toast.error("Kategori sudah ada");
+      return;
+    }
+
+    setSavingCategory(true);
+    const { data, error } = await supabase
+      .from("spm_categories")
+      .insert({ name: trimmed })
+      .select("name")
+      .single();
+    setSavingCategory(false);
+
+    if (error) {
+      toast.error("Gagal menambah kategori");
+      return;
+    }
+
+    const savedName = data?.name || trimmed;
+    const next = [...categories, savedName].sort((a, b) => a.localeCompare(b, "id"));
+    setCategories(Array.from(new Set(next)));
+    setKategori(savedName);
+    setNewKategori("");
+    toast.success("Kategori berhasil ditambahkan");
+  };
+
+  const handleDeleteCategory = async (name: string) => {
+    setSavingCategory(true);
+    const { error } = await supabase
+      .from("spm_categories")
+      .delete()
+      .eq("name", name);
+    setSavingCategory(false);
+
+    if (error) {
+      toast.error("Gagal menghapus kategori");
+      return;
+    }
+
+    const next = categories.filter((c) => c !== name);
+    setCategories(next.length > 0 ? next : [...SPM_CATEGORIES_DEFAULT]);
+    if (kategori === name) {
+      const fallback = next[0] || SPM_CATEGORIES_DEFAULT[0] || "";
+      setKategori(fallback);
+    }
+    toast.success("Kategori berhasil dihapus");
   };
 
   return (
@@ -528,20 +618,16 @@ export default function SPMForm({ existingSPMs, editSPM, onSave, onCancel }: Pro
                 onChange={e => setNewKategori(e.target.value)}
                 placeholder="Nama kategori baru"
                 onKeyDown={e => {
-                  if (e.key === 'Enter') e.preventDefault();
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    void handleAddCategory();
+                  }
                 }}
               />
               <Button
                 type="button"
-                onClick={() => {
-                  const trimmed = newKategori.trim();
-                  if (!trimmed || categories.includes(trimmed)) return;
-                  const next = [...categories, trimmed];
-                  setCategories(next);
-                  saveSPMCategories(next);
-                  setKategori(trimmed);
-                  setNewKategori('');
-                }}
+                onClick={() => void handleAddCategory()}
+                disabled={savingCategory}
               >
                 <Plus className="h-4 w-4" />
               </Button>
@@ -555,12 +641,8 @@ export default function SPMForm({ existingSPMs, editSPM, onSave, onCancel }: Pro
                     variant="ghost"
                     size="icon"
                     className="h-7 w-7"
-                    onClick={() => {
-                      const next = categories.filter(c => c !== k);
-                      setCategories(next);
-                      saveSPMCategories(next);
-                      if (kategori === k) setKategori(next[0] || '');
-                    }}
+                    onClick={() => void handleDeleteCategory(k)}
+                    disabled={savingCategory}
                   >
                     <Trash2 className="h-3 w-3 text-destructive" />
                   </Button>
