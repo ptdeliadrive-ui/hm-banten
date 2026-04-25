@@ -27,6 +27,7 @@ function mapRowToSPM(row: any, items: any[]): SPMDocument {
     items: items.map((item) => ({
       id: item.id,
       uraian: item.uraian,
+      kategori: item.kategori || row.kategori || "Lain-lain",
       bankCode: item.bank_code,
       bankName: item.bank_name,
       rekening: item.rekening,
@@ -70,6 +71,7 @@ function mapSPMItemToRow(spm: SPMDocument, item: SPMDocument["items"][number]) {
     id: item.id,
     spm_id: spm.id,
     uraian: item.uraian,
+    kategori: item.kategori || spm.kategori || "Lain-lain",
     bank_code: item.bankCode,
     bank_name: item.bankName,
     rekening: item.rekening,
@@ -125,6 +127,7 @@ function normalizeItems(items: SPMDocument["items"]) {
     .map((item) => ({
       id: item.id,
       uraian: item.uraian,
+      kategori: item.kategori,
       bankCode: item.bankCode,
       bankName: item.bankName,
       rekening: item.rekening,

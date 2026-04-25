@@ -5,12 +5,12 @@ import { type Expense } from "./store";
 export function spmToExpenses(spms: SPMDocument[]): Expense[] {
   return spms
     .filter((spm) => isSPMApproved(spm.status))
-    .flatMap(spm =>
-      spm.items.map((item, idx) => ({
+    .flatMap((spm) =>
+      spm.items.map((item) => ({
         id: `spm-${spm.id}-${item.id}`,
         spmNumber: spm.nomorSPM,
         date: spm.tanggal,
-        type: 'SPM',
+        type: item.kategori || spm.kategori || "SPM",
         amount: item.jumlah,
         recipient: item.atasNama,
         accountNumber: item.rekening,

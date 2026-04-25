@@ -25,6 +25,16 @@ export interface TabungRow {
   totalTabung: number;
 }
 
+export interface SPMItemRow {
+  uraian: string;
+  kategori?: string;
+  bankCode: string;
+  bankName?: string;
+  rekening: string;
+  atasNama: string;
+  jumlah: number;
+}
+
 type RowData = Record<string, string>;
 
 let excelJSImportPromise: Promise<ExcelJSImport> | null = null;
@@ -430,6 +440,63 @@ export const downloadPemasukanTemplate = async (memberNames?: string[]) => {
   link.click();
   document.body.removeChild(link);
   URL.revokeObjectURL(url);
+};
+
+export const parseSPMItemsExcel = async (file: File): Promise<SPMItemRow[]> => {
+  const rawRows = await parseSpreadsheet(file);
+
+  return rawRows.map((row, idx) => {
+    const uraian = getValue(row, ["URAIAN", "Uraian", "Deskripsi", "Keterangan"]);
+    const kategori = getValue(row, ["KATEGORI", "Kategori", "Category"]);
+    const bankCode = getValue(row, ["BANK CODE", "Bank Code", "Kode Bank", "Bank"]);
+    const bankName = getValue(row, ["BANK NAMA", "Bank Nama", "Nama Bank"]);
+    const rekening = getValue(row, ["NO REKENING", "No Rekening", "Nomor Rekening", "Rekening"]);
+    const atasNama = getValue(row, ["ATAS NAMA", "Atas Nama", "Penerima"]);
+    const jumlahRaw = getValue(row, ["JUMLAH", "Jumlah", "Nominal", "Amount", "Jumlah (Rp)"])
+      .replace(/\./g, "")
+      .replace(/,/g, "")
+      .replace(/[^0-9-]/g, "");
+    const jumlah = Number(jumlahRaw);
+
+    if (!uraian) {
+      throw new Error(`Baris ${idx + 1}: URAIAN wajib diisi.`);
+    }
+
+    if (!bankCode && !bankName) {
+      throw new Error(`Baris ${idx + 1}: BANK CODE atau BANK NAMA wajib diisi.`);
+    }
+
+    if (!rekening) {
+      throw new Error(`Baris ${idx + 1}: NO REKENING wajib diisi.`);
+    }
+
+    if (!atasNama) {
+      throw new Error(`Baris ${idx + 1}: ATAS NAMA wajib diisi.`);
+    }
+
+    if (!Number.isFinite(jumlah) || jumlah <= 0) {
+      throw new Error(`Baris ${idx + 1}: JUMLAH harus angka > 0.`);
+    }
+
+    return {
+      uraian,
+      kategori: kategori || undefined,
+      bankCode,
+      bankName: bankName || undefined,
+      rekening,
+      atasNama,
+      jumlah,
+    };
+  });
+};
+
+export const downloadSPMItemsTemplate = async () => {
+  await downloadWorkbook(
+    ["URAIAN", "KATEGORI", "BANK CODE", "BANK NAMA", "NO REKENING", "ATAS NAMA", "JUMLAH"],
+    ["Pembelian ATK", "Operasional Kantor", "001", "Bank Mandiri", "1234567890", "PT Contoh", "250000"],
+    "template_rincian_spm.xlsx",
+    "Rincian SPM"
+  );
 };
 
 export interface RekapIuranExcelRow {

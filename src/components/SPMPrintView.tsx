@@ -37,6 +37,7 @@ const SPMPrintView = forwardRef<HTMLDivElement, Props>(({ spm }, ref) => {
           <tr className="bg-gray-100">
             <th className="border border-black px-2 py-1.5 w-8 text-center">No</th>
             <th className="border border-black px-2 py-1.5 text-left">Uraian</th>
+            <th className="border border-black px-2 py-1.5 w-28 text-center">Kategori</th>
             <th className="border border-black px-2 py-1.5 w-24 text-center">Bank Tujuan<br />(Kode Bank)</th>
             <th className="border border-black px-2 py-1.5 w-28 text-center">Rekening Tujuan</th>
             <th className="border border-black px-2 py-1.5 w-28 text-center">Atas Nama</th>
@@ -48,6 +49,7 @@ const SPMPrintView = forwardRef<HTMLDivElement, Props>(({ spm }, ref) => {
             <tr key={item.id || i}>
               <td className="border border-black px-2 py-1 text-center">{i + 1}</td>
               <td className="border border-black px-2 py-1">{item.uraian}</td>
+              <td className="border border-black px-2 py-1 text-center">{item.kategori || spm.kategori || "-"}</td>
               <td className="border border-black px-2 py-1 text-center">{`${item.bankName} (${item.bankCode})`}</td>
               <td className="border border-black px-2 py-1 text-center">{item.rekening}</td>
               <td className="border border-black px-2 py-1">{item.atasNama}</td>
@@ -57,7 +59,7 @@ const SPMPrintView = forwardRef<HTMLDivElement, Props>(({ spm }, ref) => {
         </tbody>
         <tfoot>
           <tr className="font-bold bg-gray-50">
-            <td colSpan={5} className="border border-black px-2 py-1.5 text-right">TOTAL :</td>
+            <td colSpan={6} className="border border-black px-2 py-1.5 text-right">TOTAL :</td>
             <td className="border border-black px-2 py-1.5 text-right">{formatCurrency(spm.total)}</td>
           </tr>
         </tfoot>

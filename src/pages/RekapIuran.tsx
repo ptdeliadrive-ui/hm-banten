@@ -10,6 +10,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { useIncomes } from "@/lib/income-context";
 import { useMembers } from "@/lib/member-context";
 import { useAuth } from "@/lib/auth-context";
+import { supabase } from "@/integrations/supabase/client";
 import { formatCurrency } from "@/lib/store";
 import { downloadRekapIuranExcel, downloadTabungTemplate, parseTabungExcel } from "@/lib/excel-parser";
 import { toast } from "sonner";
@@ -30,7 +31,6 @@ const MONTHS = [
   "Desember",
 ];
 
-const TABUNG_STORAGE_KEY = "rekap-iuran-tabung-v1";
 const REPORT_YEARS = [2024, 2025, 2026, 2027, 2028, 2029, 2030];
 
 const expenseLines = [
@@ -176,7 +176,7 @@ function getIncomeComponentAmount(
 }
 
 const RekapIuran = () => {
-  const { role } = useAuth();
+  const { role, user } = useAuth();
   const { incomes } = useIncomes();
   const { members } = useMembers();
   const canShowTabungInputTools = role !== "bendahara";
@@ -190,24 +190,118 @@ const RekapIuran = () => {
   const [manualTabungValue, setManualTabungValue] = useState("");
   const [importFile, setImportFile] = useState<File | null>(null);
   const [importing, setImporting] = useState(false);
-  const [noSpm, setNoSpm] = useState<string>(() => {
-    if (typeof window === "undefined") return "";
-    return window.localStorage.getItem("rekap-iuran-no-spm") || "";
-  });
+  const [noSpm, setNoSpm] = useState<string>("");
+  const [savingNoSpm, setSavingNoSpm] = useState(false);
   const reportRef = useRef<HTMLDivElement>(null);
-  const [tabungValues, setTabungValues] = useState<Record<string, number>>(() => {
-    if (typeof window === "undefined") return {};
-    try {
-      const saved = window.localStorage.getItem(TABUNG_STORAGE_KEY);
-      return saved ? (JSON.parse(saved) as Record<string, number>) : {};
-    } catch {
-      return {};
+  const [tabungValues, setTabungValues] = useState<Record<string, number>>({});
+
+  const saveTabungValue = async (memberId: string, value: number) => {
+    if (!user?.id || !role) {
+      toast.error("Sesi login tidak valid. Silakan login ulang.");
+      return false;
     }
-  });
+
+    if (value <= 0) {
+      const { error } = await supabase
+        .from("rekap_iuran_tabung_values")
+        .delete()
+        .eq("period_year", tfYear)
+        .eq("period_month", tfMonth + 1)
+        .eq("member_id", memberId);
+
+      if (error) {
+        toast.error(`Gagal menghapus total tabung: ${error.message}`);
+        return false;
+      }
+
+      return true;
+    }
+
+    const { error } = await supabase.from("rekap_iuran_tabung_values").upsert(
+      {
+        period_year: tfYear,
+        period_month: tfMonth + 1,
+        member_id: memberId,
+        total_tabung: value,
+        created_by_user_id: user.id,
+        created_by_role: role,
+      },
+      { onConflict: "period_year,period_month,member_id" },
+    );
+
+    if (error) {
+      toast.error(`Gagal menyimpan total tabung: ${error.message}`);
+      return false;
+    }
+
+    return true;
+  };
 
   useEffect(() => {
-    window.localStorage.setItem(TABUNG_STORAGE_KEY, JSON.stringify(tabungValues));
-  }, [tabungValues]);
+    let active = true;
+
+    const loadTabung = async () => {
+      const { data, error } = await supabase
+        .from("rekap_iuran_tabung_values")
+        .select("member_id, total_tabung")
+        .eq("period_year", tfYear)
+        .eq("period_month", tfMonth + 1);
+
+      if (!active) return;
+
+      if (error) {
+        console.error("Failed to load total tabung", error);
+        setTabungValues({});
+        return;
+      }
+
+      const next: Record<string, number> = {};
+      for (const item of data || []) {
+        const memberId = String(item.member_id || "");
+        if (!memberId) continue;
+        next[tabungKey(memberId, tfMonth, tfYear)] = Number(item.total_tabung || 0);
+      }
+
+      setTabungValues(next);
+    };
+
+    void loadTabung();
+
+    return () => {
+      active = false;
+    };
+  }, [tfMonth, tfYear]);
+
+  useEffect(() => {
+    let active = true;
+
+    const loadNoSpm = async () => {
+      setNoSpm("");
+
+      const { data, error } = await supabase
+        .from("rekap_iuran_spm_notes")
+        .select("no_spm")
+        .eq("period_year", tfYear)
+        .eq("period_month", tfMonth + 1)
+        .order("created_at", { ascending: false })
+        .limit(1);
+
+      if (!active) return;
+
+      if (error) {
+        console.error("Failed to load No SPM", error);
+        return;
+      }
+
+      setNoSpm(data?.[0]?.no_spm ?? "");
+    };
+
+    void loadNoSpm();
+
+    return () => {
+      active = false;
+    };
+  }, [tfMonth, tfYear]);
 
   const agenPsoMembers = useMemo(
     () =>
@@ -291,13 +385,16 @@ const RekapIuran = () => {
     setTabungValues((prev) => ({ ...prev, [key]: numericValue }));
   };
 
-  const handleSaveManualTabung = () => {
+  const handleSaveManualTabung = async () => {
     if (!selectedMemberId) {
       toast.error("Pilih anggota terlebih dahulu.");
       return;
     }
 
     const value = Number(manualTabungValue.replace(/[^0-9]/g, "")) || 0;
+    const saved = await saveTabungValue(selectedMemberId, value);
+    if (!saved) return;
+
     const key = tabungKey(selectedMemberId, tfMonth, tfYear);
     setTabungValues((prev) => ({ ...prev, [key]: value }));
     setManualTabungValue("");
@@ -308,11 +405,15 @@ const RekapIuran = () => {
     await downloadTabungTemplate(agenPsoMembers.map((m) => m.namaPT));
   };
 
-  const handleDeleteTabungMember = () => {
+  const handleDeleteTabungMember = async () => {
     if (!selectedMemberId) {
       toast.error("Pilih anggota terlebih dahulu.");
       return;
     }
+
+    const deleted = await saveTabungValue(selectedMemberId, 0);
+    if (!deleted) return;
+
     const key = tabungKey(selectedMemberId, tfMonth, tfYear);
     setTabungValues((prev) => {
       const next = { ...prev };
@@ -323,7 +424,17 @@ const RekapIuran = () => {
     toast.success("Data tabung anggota berhasil dihapus.");
   };
 
-  const handleDeleteAllTabung = () => {
+  const handleDeleteAllTabung = async () => {
+    const { error } = await supabase
+      .from("rekap_iuran_tabung_values")
+      .delete()
+      .gt("id", 0);
+
+    if (error) {
+      toast.error(`Gagal menghapus semua data tabung: ${error.message}`);
+      return;
+    }
+
     setTabungValues({});
     setManualTabungValue("");
     setSelectedMemberId("");
@@ -350,6 +461,19 @@ const RekapIuran = () => {
 
       let importedCount = 0;
       const notFound: string[] = [];
+      const upsertRows: Array<{
+        period_year: number;
+        period_month: number;
+        member_id: string;
+        total_tabung: number;
+        created_by_user_id: string;
+        created_by_role: "admin" | "bendahara" | "ketua";
+      }> = [];
+
+      if (!user?.id || !role) {
+        toast.error("Sesi login tidak valid. Silakan login ulang.");
+        return;
+      }
 
       setTabungValues((prev) => {
         const next = { ...prev };
@@ -361,24 +485,43 @@ const RekapIuran = () => {
             (row.namaAgen ? byNameNorm.get(normalizeName(row.namaAgen)) : undefined);
 
           if (!matchedMember) {
-            notFound.push(`baris ${idx + 1}`);
+            notFound.push(`Baris ${idx + 1}: Agen "${row.namaAgen || row.noSPBU || row.memberId || "?"}" tidak ditemukan`);
             return;
           }
 
           const importMonthIndex = MONTHS.findIndex((m) => m.toLowerCase() === row.bulan.toLowerCase());
           if (importMonthIndex < 0) {
-            notFound.push(`baris ${idx + 1}`);
+            notFound.push(`Baris ${idx + 1}: Bulan "${row.bulan}" tidak valid`);
             return;
           }
 
           const importYear = row.tahun || tfYear;
           const key = tabungKey(matchedMember.id, importMonthIndex, importYear);
           next[key] = row.totalTabung;
+          upsertRows.push({
+            period_year: importYear,
+            period_month: importMonthIndex + 1,
+            member_id: matchedMember.id,
+            total_tabung: row.totalTabung,
+            created_by_user_id: user.id,
+            created_by_role: role,
+          });
           importedCount += 1;
         });
 
         return next;
       });
+
+      if (upsertRows.length > 0) {
+        const { error: upsertError } = await supabase
+          .from("rekap_iuran_tabung_values")
+          .upsert(upsertRows, { onConflict: "period_year,period_month,member_id" });
+
+        if (upsertError) {
+          toast.error(`Gagal menyimpan hasil import: ${upsertError.message}`);
+          return;
+        }
+      }
 
       setImportFile(null);
 
@@ -388,7 +531,9 @@ const RekapIuran = () => {
       }
 
       if (notFound.length > 0) {
-        toast.warning(`Import selesai: ${importedCount} data masuk, ${notFound.length} data tidak cocok.`);
+        const errorSummary = notFound.slice(0, 3).join("\n");
+        const moreThanThree = notFound.length > 3 ? `\n\n(+${notFound.length - 3} error lainnya)` : "";
+        toast.warning(`Import selesai: ${importedCount} data masuk.\n\nData tidak cocok:\n${errorSummary}${moreThanThree}`);
       } else {
         toast.success(`Import berhasil: ${importedCount} data total tabung tersimpan.`);
       }
@@ -540,12 +685,38 @@ const RekapIuran = () => {
                 <Button
                   type="button"
                   variant="outline"
-                  onClick={() => {
-                    window.localStorage.setItem("rekap-iuran-no-spm", noSpm);
-                    toast.success("No SPM disimpan.");
+                  disabled={savingNoSpm}
+                  onClick={async () => {
+                    const value = noSpm.trim();
+                    if (!value) {
+                      toast.error("No SPM tidak boleh kosong.");
+                      return;
+                    }
+
+                    if (!user?.id || !role) {
+                      toast.error("Sesi login tidak valid. Silakan login ulang.");
+                      return;
+                    }
+
+                    setSavingNoSpm(true);
+                    const { error } = await supabase.from("rekap_iuran_spm_notes").insert({
+                      period_year: tfYear,
+                      period_month: tfMonth + 1,
+                      no_spm: value,
+                      created_by_user_id: user.id,
+                      created_by_role: role,
+                    });
+                    setSavingNoSpm(false);
+
+                    if (error) {
+                      toast.error(`Gagal menyimpan No SPM: ${error.message}`);
+                      return;
+                    }
+
+                    toast.success(`No SPM disimpan untuk periode ${toMonthLabel(tfMonth, tfYear)}.`);
                   }}
                 >
-                  Simpan
+                  {savingNoSpm ? "Menyimpan..." : "Simpan"}
                 </Button>
               </div>
             </div>
@@ -710,6 +881,10 @@ const RekapIuran = () => {
                   <Input
                     value={formatNumberInput(row.totalTabung)}
                     onChange={(event) => handleTabungChange(row.id, event.target.value)}
+                    onBlur={async (event) => {
+                      const value = Number(event.target.value.replace(/[^0-9]/g, "")) || 0;
+                      await saveTabungValue(row.id, value);
+                    }}
                     inputMode="numeric"
                     placeholder="Input total tabung"
                     className="h-8 rounded-none border-0 px-2 text-right shadow-none focus-visible:ring-0 print:hidden"
@@ -748,7 +923,10 @@ const RekapIuran = () => {
                       <AlertDialogFooter>
                         <AlertDialogCancel>Batal</AlertDialogCancel>
                         <AlertDialogAction
-                          onClick={() => {
+                          onClick={async () => {
+                            const deleted = await saveTabungValue(row.id, 0);
+                            if (!deleted) return;
+
                             const key = tabungKey(row.id, tfMonth, tfYear);
                             setTabungValues((prev) => {
                               const next = { ...prev };

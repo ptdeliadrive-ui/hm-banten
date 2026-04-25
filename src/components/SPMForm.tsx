@@ -7,10 +7,12 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Plus, Trash2, Save, Settings2 } from "lucide-react";
+import { Plus, Trash2, Save, Settings2, Upload, Download } from "lucide-react";
 import { type SPMDocument, type SPMLineItem, type SavedAccount, type SPMNumberType, BANK_CODES, SPM_NUMBER_TYPES, getSPMCategories, saveSPMCategories, generateSPMNumberNew, inferSPMNumberType } from "@/lib/spm-store";
+import { downloadSPMItemsTemplate, parseSPMItemsExcel } from "@/lib/excel-parser";
 import { formatCurrency } from "@/lib/store";
 import { supabase } from "@/integrations/supabase/client";
+import { toast } from "sonner";
 
 interface Props {
   existingSPMs: SPMDocument[];
@@ -19,8 +21,17 @@ interface Props {
   onCancel: () => void;
 }
 
-function emptyItem(): SPMLineItem {
-  return { id: String(Date.now() + Math.random()), uraian: '', bankCode: '', bankName: '', rekening: '', atasNama: '', jumlah: 0 };
+function emptyItem(defaultKategori = "Lain-lain"): SPMLineItem {
+  return {
+    id: String(Date.now() + Math.random()),
+    uraian: '',
+    kategori: defaultKategori,
+    bankCode: '',
+    bankName: '',
+    rekening: '',
+    atasNama: '',
+    jumlah: 0,
+  };
 }
 
 export default function SPMForm({ existingSPMs, editSPM, onSave, onCancel }: Props) {
@@ -33,11 +44,12 @@ export default function SPMForm({ existingSPMs, editSPM, onSave, onCancel }: Pro
   const [nomorType, setNomorType] = useState<SPMNumberType>(inferSPMNumberType(editSPM?.nomorSPM));
   const [isManualNumber, setIsManualNumber] = useState(false);
   const [manualNomorSPM, setManualNomorSPM] = useState("");
-  const [items, setItems] = useState<SPMLineItem[]>(editSPM?.items || [emptyItem()]);
+  const [items, setItems] = useState<SPMLineItem[]>(editSPM?.items || [emptyItem(editSPM?.kategori || 'Operasional Kantor')]);
   const [savedAccounts, setSavedAccounts] = useState<SavedAccount[]>([]);
   const [categories, setCategories] = useState<string[]>(() => getSPMCategories());
   const [manageOpen, setManageOpen] = useState(false);
   const [newKategori, setNewKategori] = useState('');
+  const [importing, setImporting] = useState(false);
   const nomorSPMOtomatis = useMemo(() => {
     if (editSPM) return editSPM.nomorSPM;
     return generateSPMNumberNew(existingSPMs, tanggal, nomorType);
@@ -93,11 +105,80 @@ export default function SPMForm({ existingSPMs, editSPM, onSave, onCancel }: Pro
     }));
   };
 
-  const addRow = () => setItems([...items, emptyItem()]);
+  const addRow = () => setItems([...items, emptyItem(kategori || 'Lain-lain')]);
   const removeRow = (id: string) => items.length > 1 && setItems(items.filter(i => i.id !== id));
 
+  const resolveBank = (rawCode: string, rawName?: string) => {
+    const normalizedCode = rawCode.trim();
+    const normalizedName = (rawName || "").trim();
+
+    const byCode = BANK_CODES.find((b) => b.code === normalizedCode);
+    if (byCode) {
+      return { bankCode: byCode.code, bankName: byCode.name };
+    }
+
+    if (normalizedName) {
+      const byName = BANK_CODES.find((b) => b.name.toLowerCase() === normalizedName.toLowerCase());
+      if (byName) {
+        return { bankCode: byName.code, bankName: byName.name };
+      }
+    }
+
+    return {
+      bankCode: normalizedCode,
+      bankName: normalizedName,
+    };
+  };
+
+  const handleImportItems = async (file: File) => {
+    setImporting(true);
+    try {
+      const parsed = await parseSPMItemsExcel(file);
+      if (parsed.length === 0) {
+        toast.error("File tidak berisi data rincian SPM.");
+        return;
+      }
+
+      const nextItems: SPMLineItem[] = parsed.map((row) => {
+        const bank = resolveBank(row.bankCode, row.bankName);
+        return {
+          id: String(Date.now() + Math.random()),
+          uraian: row.uraian,
+          kategori: row.kategori || kategori || "Lain-lain",
+          bankCode: bank.bankCode,
+          bankName: bank.bankName,
+          rekening: row.rekening,
+          atasNama: row.atasNama,
+          jumlah: row.jumlah,
+        };
+      });
+
+      setItems((prev) => {
+        const hasOnlyEmptyRow =
+          prev.length === 1 &&
+          !prev[0].uraian &&
+          !prev[0].bankCode &&
+          !prev[0].rekening &&
+          !prev[0].atasNama &&
+          !prev[0].jumlah;
+
+        if (hasOnlyEmptyRow) {
+          return nextItems;
+        }
+
+        return [...prev, ...nextItems];
+      });
+
+      toast.success(`Import rincian SPM berhasil: ${nextItems.length} baris ditambahkan.`);
+    } catch (error) {
+      toast.error(`Gagal import Excel: ${error instanceof Error ? error.message : "unknown error"}`);
+    } finally {
+      setImporting(false);
+    }
+  };
+
   const handleSubmit = () => {
-    const hasEmpty = items.some(i => !i.uraian || !i.bankCode || !i.rekening || !i.atasNama || !i.jumlah);
+    const hasEmpty = items.some(i => !i.uraian || !i.kategori || !i.bankCode || !i.rekening || !i.atasNama || !i.jumlah);
     if (hasEmpty) { alert('Semua field pada rincian harus diisi'); return; }
     if (!tanggal || !tujuan || !lokasi || !namaKetua || !namaBendahara) { alert('Semua field wajib harus diisi'); return; }
 
@@ -233,9 +314,33 @@ export default function SPMForm({ existingSPMs, editSPM, onSave, onCancel }: Pro
         <CardHeader>
           <div className="flex items-center justify-between">
             <CardTitle>Rincian Pengeluaran</CardTitle>
-            <Button variant="outline" size="sm" onClick={addRow}>
-              <Plus className="mr-1 h-4 w-4" />Tambah Baris
-            </Button>
+            <div className="flex items-center gap-2">
+              <Button variant="outline" size="sm" onClick={() => void downloadSPMItemsTemplate()}>
+                <Download className="mr-1 h-4 w-4" />Template Excel
+              </Button>
+              <label>
+                <input
+                  type="file"
+                  accept=".xlsx,.csv"
+                  className="hidden"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) {
+                      void handleImportItems(file);
+                    }
+                    e.currentTarget.value = "";
+                  }}
+                />
+                <Button variant="outline" size="sm" type="button" disabled={importing} asChild>
+                  <span>
+                    <Upload className="mr-1 h-4 w-4" />{importing ? "Mengimpor..." : "Upload Excel"}
+                  </span>
+                </Button>
+              </label>
+              <Button variant="outline" size="sm" onClick={addRow}>
+                <Plus className="mr-1 h-4 w-4" />Tambah Baris
+              </Button>
+            </div>
           </div>
         </CardHeader>
         <CardContent>
@@ -245,6 +350,7 @@ export default function SPMForm({ existingSPMs, editSPM, onSave, onCancel }: Pro
                 <TableRow>
                   <TableHead className="w-10">No</TableHead>
                   <TableHead>Uraian</TableHead>
+                  <TableHead className="w-44">Kategori</TableHead>
                   <TableHead className="w-40">Penerima</TableHead>
                   <TableHead className="w-36">Bank Tujuan</TableHead>
                   <TableHead className="w-32">No Rekening</TableHead>
@@ -258,6 +364,14 @@ export default function SPMForm({ existingSPMs, editSPM, onSave, onCancel }: Pro
                     <TableCell className="text-center font-mono">{idx + 1}</TableCell>
                     <TableCell>
                       <Input value={item.uraian} onChange={e => updateItem(item.id, 'uraian', e.target.value)} placeholder="Uraian pengeluaran" className="h-8 text-xs" />
+                    </TableCell>
+                    <TableCell>
+                      <Select value={item.kategori} onValueChange={v => updateItem(item.id, 'kategori', v)}>
+                        <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Pilih kategori" /></SelectTrigger>
+                        <SelectContent>
+                          {categories.map((k) => <SelectItem key={k} value={k}>{k}</SelectItem>)}
+                        </SelectContent>
+                      </Select>
                     </TableCell>
                     <TableCell>
                       {savedAccounts.length > 0 ? (

@@ -67,8 +67,30 @@ function getAllowedOrigins() {
     "http://127.0.0.1:4173",
     "http://localhost:5173",
     "http://127.0.0.1:5173",
+    "https://keuangan-hm.vercel.app",
     ...configuredOrigins,
   ]);
+}
+
+function isOriginAllowed(origin: string) {
+  const allowedOrigins = getAllowedOrigins();
+  if (allowedOrigins.has(origin)) {
+    return true;
+  }
+
+  for (const candidate of allowedOrigins) {
+    if (!candidate.includes("*")) continue;
+
+    const escaped = candidate
+      .replace(/[.+?^${}()|[\]\\]/g, "\\$&")
+      .replace(/\*/g, ".*");
+
+    if (new RegExp(`^${escaped}$`).test(origin)) {
+      return true;
+    }
+  }
+
+  return false;
 }
 
 function resolveCorsHeaders(req: Request) {
@@ -77,7 +99,7 @@ function resolveCorsHeaders(req: Request) {
     return corsHeaderBase;
   }
 
-  if (!getAllowedOrigins().has(origin)) {
+  if (!isOriginAllowed(origin)) {
     return null;
   }
 

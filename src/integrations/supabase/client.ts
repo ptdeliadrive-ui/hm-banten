@@ -2,7 +2,12 @@
 import { createClient } from '@supabase/supabase-js';
 import type { Database } from './types';
 
-const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
+const RAW_SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
+const SUPABASE_URL = RAW_SUPABASE_URL
+  ?.trim()
+  .replace(/\/+$/, '')
+  .replace(/\/rest\/v1$/, '')
+  .replace(/\/auth\/v1$/, '');
 const SUPABASE_PUBLISHABLE_KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
 
 // Import the supabase client like this:

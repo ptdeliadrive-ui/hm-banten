@@ -1,6 +1,7 @@
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Download, Printer } from "lucide-react";
 import { formatCurrency } from "@/lib/store";
@@ -226,6 +227,22 @@ const Laporan = () => {
 
   const [selectedYear, setSelectedYear] = useState<number>(new Date().getFullYear());
   const [selectedMonth, setSelectedMonth] = useState<number>(new Date().getMonth());
+  const [saldoAwalInput, setSaldoAwalInput] = useState<string>("");
+
+  // Load saldo awal override dari localStorage saat tahun berubah
+  useEffect(() => {
+    const stored = localStorage.getItem(`laporan_saldo_awal_${selectedYear}`);
+    setSaldoAwalInput(stored ?? "");
+  }, [selectedYear]);
+
+  const handleSaldoAwalChange = (val: string) => {
+    setSaldoAwalInput(val);
+    if (val.trim() === "") {
+      localStorage.removeItem(`laporan_saldo_awal_${selectedYear}`);
+    } else {
+      localStorage.setItem(`laporan_saldo_awal_${selectedYear}`, val);
+    }
+  };
 
   const period = useMemo(() => {
     const year = availableYears.includes(selectedYear) ? selectedYear : availableYears[0];
@@ -271,7 +288,9 @@ const Laporan = () => {
       return !Number.isNaN(d.getTime()) && d < period.start ? sum + e.amount : sum;
     }, 0);
 
-    const saldoAwal = incomeBefore - spmBefore - manualBefore;
+    const saldoAwalAuto = incomeBefore - spmBefore - manualBefore;
+    const saldoAwalOverride = saldoAwalInput.trim() !== "" ? Number(saldoAwalInput.replace(/[^0-9.\-]/g, "")) : NaN;
+    const saldoAwal = !Number.isNaN(saldoAwalOverride) ? saldoAwalOverride : saldoAwalAuto;
 
     const incomeGrouped = new Map<string, number>();
     const memberById = new Map(members.map((m) => [m.id, m]));
@@ -284,8 +303,15 @@ const Laporan = () => {
 
     const expenseGrouped = new Map<string, number>();
     spmInRange.forEach((s) => {
-      const key = s.kategori || "Pengeluaran SPM";
-      expenseGrouped.set(key, (expenseGrouped.get(key) || 0) + s.total);
+      if (s.items.length > 0) {
+        s.items.forEach((item) => {
+          const key = (item.kategori || s.kategori || "Pengeluaran SPM").trim() || "Pengeluaran SPM";
+          expenseGrouped.set(key, (expenseGrouped.get(key) || 0) + Number(item.jumlah || 0));
+        });
+      } else {
+        const key = s.kategori || "Pengeluaran SPM";
+        expenseGrouped.set(key, (expenseGrouped.get(key) || 0) + s.total);
+      }
     });
     manualInRange.forEach((e) => {
       const key = e.type?.trim() || "Pengeluaran Manual";
@@ -319,7 +345,7 @@ const Laporan = () => {
       rows: [...incomeRows, ...expenseRows],
       incomeDetails,
     };
-  }, [incomes, manualExpenses, members, period.end, period.start, spms]);
+  }, [incomes, manualExpenses, members, period.end, period.start, spms, saldoAwalInput]);
 
   const periodLabel =
     mode === "bulanan"
@@ -408,6 +434,19 @@ const Laporan = () => {
                 </Select>
               </div>
             )}
+            <div className="space-y-2">
+              <p className="text-xs text-muted-foreground">
+                Saldo Awal Tahun {selectedYear}
+                <span className="ml-1 text-[10px] text-muted-foreground/60">(kosongkan = otomatis)</span>
+              </p>
+              <Input
+                type="number"
+                placeholder="Masukkan saldo awal"
+                value={saldoAwalInput}
+                onChange={(e) => handleSaldoAwalChange(e.target.value)}
+                className="h-9"
+              />
+            </div>
           </div>
         </CardContent>
       </Card>

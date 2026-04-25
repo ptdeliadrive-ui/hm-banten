@@ -60,25 +60,7 @@ function RequireRole({ roles, children }: { roles: AppRole[]; children: React.Re
 }
 
 function HomePage() {
-  const { role } = useAuth();
-  if (role === "ketua") return <Navigate to="/spm" replace />;
   return <Dashboard />;
-}
-
-function KetuaAppRoutes() {
-  return (
-    <FinanceProvider loadManualExpenses={false}>
-      <AppLayout>
-        <Suspense fallback={<LoadingPage />}>
-          <Routes>
-            <Route path="/" element={<Navigate to="/spm" replace />} />
-            <Route path="/spm" element={<RequireRole roles={["ketua"]}><SPM /></RequireRole>} />
-            <Route path="*" element={<NotFound />} />
-          </Routes>
-        </Suspense>
-      </AppLayout>
-    </FinanceProvider>
-  );
 }
 
 function AdminBendaharaRoutes() {
@@ -90,12 +72,12 @@ function AdminBendaharaRoutes() {
             <Suspense fallback={<LoadingPage />}>
               <Routes>
                 <Route path="/" element={<RequireRole roles={["admin", "bendahara", "ketua"]}><HomePage /></RequireRole>} />
-                <Route path="/laporan" element={<RequireRole roles={["admin", "bendahara"]}><Laporan /></RequireRole>} />
-                <Route path="/rekap-iuran" element={<RequireRole roles={["admin", "bendahara"]}><RekapIuran /></RequireRole>} />
-                <Route path="/rekap-iuran-seluruh-anggota" element={<RequireRole roles={["admin", "bendahara"]}><RekapIuranSeluruhAnggota /></RequireRole>} />
-                <Route path="/rekonsiliasi-bank" element={<RequireRole roles={["admin", "bendahara"]}><RekonsiliasiBank /></RequireRole>} />
+                <Route path="/laporan" element={<RequireRole roles={["admin", "bendahara", "ketua"]}><Laporan /></RequireRole>} />
+                <Route path="/rekap-iuran" element={<RequireRole roles={["admin", "bendahara", "ketua"]}><RekapIuran /></RequireRole>} />
+                <Route path="/rekap-iuran-seluruh-anggota" element={<RequireRole roles={["admin", "bendahara", "ketua"]}><RekapIuranSeluruhAnggota /></RequireRole>} />
+                <Route path="/rekonsiliasi-bank" element={<RequireRole roles={["admin", "bendahara", "ketua"]}><RekonsiliasiBank /></RequireRole>} />
 
-                <Route path="/pemasukan" element={<RequireRole roles={["admin", "bendahara"]}><Pemasukan /></RequireRole>} />
+                <Route path="/pemasukan" element={<RequireRole roles={["admin", "bendahara", "ketua"]}><Pemasukan /></RequireRole>} />
                 <Route path="/pengeluaran" element={<RequireRole roles={["admin"]}><Pengeluaran /></RequireRole>} />
                 <Route path="/spm" element={<RequireRole roles={["admin", "bendahara", "ketua"]}><SPM /></RequireRole>} />
                 <Route path="/master-rekening" element={<RequireRole roles={["admin"]}><MasterRekening /></RequireRole>} />
@@ -114,11 +96,6 @@ function AdminBendaharaRoutes() {
 }
 
 function ProtectedAppRoutes() {
-  const { role } = useAuth();
-  if (role === "ketua") {
-    return <KetuaAppRoutes />;
-  }
-
   return <AdminBendaharaRoutes />;
 }
 

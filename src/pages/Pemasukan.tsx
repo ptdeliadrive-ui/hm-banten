@@ -124,6 +124,17 @@ function parseIncomeNotesForDisplay(raw?: string): IncomeNoteItemParsed[] {
     .filter((item): item is IncomeNoteItemParsed => Boolean(item));
 }
 
+function incomeSignature(income: Pick<Income, "memberId" | "date" | "month" | "year" | "amount" | "status">): string {
+  return [
+    String(income.memberId || "").trim(),
+    String(income.date || "").trim(),
+    String(income.month || "").trim().toLowerCase(),
+    String(income.year || "").trim(),
+    String(Number(income.amount) || 0),
+    String(income.status || "").trim().toLowerCase(),
+  ].join("|");
+}
+
 const Pemasukan = () => {
   const { role } = useAuth();
   const { members } = useMembers();
@@ -293,6 +304,16 @@ const Pemasukan = () => {
       proofFileName,
     };
 
+    const isDuplicate = incomes.some(
+      (i) => i.id !== (editId || "") && incomeSignature(i) === incomeSignature(newIncome),
+    );
+
+    if (isDuplicate) {
+      toast.error("Data pemasukan yang sama sudah ada. Sistem menolak duplikasi.");
+      setSaving(false);
+      return;
+    }
+
     if (editId) {
       setIncomes(incomes.map(i => i.id === editId ? newIncome : i));
       toast.success("Pemasukan berhasil diperbarui");
@@ -323,6 +344,8 @@ const Pemasukan = () => {
 
       const newIncomes: Income[] = [];
       const notFound: string[] = [];
+      const duplicateRows: string[] = [];
+      const existingSignatures = new Set(incomes.map((i) => incomeSignature(i)));
 
       rows.forEach((row, idx) => {
         const member = byNameNorm.get(normalizeName(row.namaAgen));
@@ -350,6 +373,16 @@ const Pemasukan = () => {
           proofFileId: "",
           proofFileName: "",
         });
+
+        const candidate = newIncomes[newIncomes.length - 1];
+        const signature = incomeSignature(candidate);
+        if (existingSignatures.has(signature)) {
+          duplicateRows.push(`baris ${idx + 1} (${row.namaAgen})`);
+          newIncomes.pop();
+          return;
+        }
+
+        existingSignatures.add(signature);
       });
 
       if (newIncomes.length > 0) {
@@ -360,9 +393,20 @@ const Pemasukan = () => {
       if (importFileRef.current) importFileRef.current.value = "";
 
       if (newIncomes.length === 0) {
-        toast.error("Tidak ada data yang cocok dengan anggota terdaftar.");
-      } else if (notFound.length > 0) {
-        toast.warning(`Import selesai: ${newIncomes.length} data masuk, ${notFound.length} tidak cocok: ${notFound.join(", ")}.`);
+        if (duplicateRows.length > 0 && notFound.length === 0) {
+          toast.error(`Semua data duplikat, tidak ada yang ditambahkan: ${duplicateRows.join(", ")}.`);
+        } else {
+          toast.error("Tidak ada data yang cocok dengan anggota terdaftar.");
+        }
+      } else if (notFound.length > 0 || duplicateRows.length > 0) {
+        const warnings: string[] = [];
+        if (notFound.length > 0) {
+          warnings.push(`${notFound.length} tidak cocok: ${notFound.join(", ")}`);
+        }
+        if (duplicateRows.length > 0) {
+          warnings.push(`${duplicateRows.length} duplikat ditolak: ${duplicateRows.join(", ")}`);
+        }
+        toast.warning(`Import selesai: ${newIncomes.length} data masuk, ${warnings.join("; ")}.`);
       } else {
         toast.success(`Import berhasil: ${newIncomes.length} pemasukan ditambahkan.`);
       }
@@ -598,8 +642,10 @@ const Pemasukan = () => {
                         <Input
                           value={item.amount}
                           onChange={(e) => updateNoteAmount(idx, e.target.value)}
+                          onBlur={(e) => updateNoteAmount(idx, e.target.value)}
                           placeholder="Nominal (contoh 100000)"
                           inputMode="numeric"
+                          type="tel"
                         />
                         <Select value={item.month || "default"} onValueChange={(v) => updateNoteMonth(idx, v === "default" ? "" : v)}>
                           <SelectTrigger>

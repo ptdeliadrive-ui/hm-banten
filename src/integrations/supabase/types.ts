@@ -169,6 +169,72 @@ export type Database = {
         }
         Relationships: []
       }
+      rekap_iuran_spm_notes: {
+        Row: {
+          created_at: string
+          created_by_role: string
+          created_by_user_id: string | null
+          id: number
+          no_spm: string
+          period_month: number
+          period_year: number
+        }
+        Insert: {
+          created_at?: string
+          created_by_role?: string
+          created_by_user_id?: string | null
+          id?: number
+          no_spm?: string
+          period_month: number
+          period_year: number
+        }
+        Update: {
+          created_at?: string
+          created_by_role?: string
+          created_by_user_id?: string | null
+          id?: number
+          no_spm?: string
+          period_month?: number
+          period_year?: number
+        }
+        Relationships: []
+      }
+      rekap_iuran_tabung_values: {
+        Row: {
+          created_at: string
+          created_by_role: string
+          created_by_user_id: string | null
+          id: number
+          member_id: string
+          period_month: number
+          period_year: number
+          total_tabung: number
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          created_by_role?: string
+          created_by_user_id?: string | null
+          id?: number
+          member_id: string
+          period_month: number
+          period_year: number
+          total_tabung?: number
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          created_by_role?: string
+          created_by_user_id?: string | null
+          id?: number
+          member_id?: string
+          period_month?: number
+          period_year?: number
+          total_tabung?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
       members: {
         Row: {
           bidang_usaha: string
@@ -381,6 +447,7 @@ export type Database = {
           created_at: string
           id: string
           jumlah: number
+          kategori: string
           rekening: string
           spm_id: string
           updated_at: string
@@ -393,6 +460,7 @@ export type Database = {
           created_at?: string
           id: string
           jumlah: number
+          kategori?: string
           rekening: string
           spm_id: string
           updated_at?: string
@@ -405,6 +473,7 @@ export type Database = {
           created_at?: string
           id?: string
           jumlah?: number
+          kategori?: string
           rekening?: string
           spm_id?: string
           updated_at?: string

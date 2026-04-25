@@ -9,6 +9,7 @@ export interface SavedAccount {
 export interface SPMLineItem {
   id: string;
   uraian: string;
+  kategori: string;
   bankCode: string;
   bankName: string;
   rekening: string;
@@ -217,8 +218,8 @@ export const sampleSPMs: SPMDocument[] = [
     tujuan: 'Ketua Hiswana Migas DPC Banten',
     lokasi: 'Serang',
     items: [
-      { id: '1', uraian: 'Bayar listrik kantor', bankCode: '001', bankName: 'Bank Mandiri', rekening: '1234567890', atasNama: 'PT Listrik', jumlah: 500000 },
-      { id: '2', uraian: 'Catering rapat bulanan', bankCode: '002', bankName: 'Bank BCA', rekening: '0987654321', atasNama: 'Catering Ibu Sri', jumlah: 250000 },
+      { id: '1', uraian: 'Bayar listrik kantor', kategori: 'Operasional Kantor', bankCode: '001', bankName: 'Bank Mandiri', rekening: '1234567890', atasNama: 'PT Listrik', jumlah: 500000 },
+      { id: '2', uraian: 'Catering rapat bulanan', kategori: 'Kegiatan Organisasi', bankCode: '002', bankName: 'Bank BCA', rekening: '0987654321', atasNama: 'Catering Ibu Sri', jumlah: 250000 },
     ],
     total: 750000,
     status: 'dibayar',
@@ -235,7 +236,7 @@ export const sampleSPMs: SPMDocument[] = [
     tujuan: 'Ketua Hiswana Migas DPC Banten',
     lokasi: 'Serang',
     items: [
-      { id: '1', uraian: 'Beli ATK', bankCode: '001', bankName: 'Bank Mandiri', rekening: '1122334455', atasNama: 'Toko ATK Jaya', jumlah: 350000 },
+      { id: '1', uraian: 'Beli ATK', kategori: 'Administrasi', bankCode: '001', bankName: 'Bank Mandiri', rekening: '1122334455', atasNama: 'Toko ATK Jaya', jumlah: 350000 },
     ],
     total: 350000,
     status: 'disetujui_ketua',
@@ -252,7 +253,7 @@ export const sampleSPMs: SPMDocument[] = [
     tujuan: 'Ketua Hiswana Migas DPC Banten',
     lokasi: 'Serang',
     items: [
-      { id: '1', uraian: 'Transport rapat', bankCode: '004', bankName: 'Bank BNI', rekening: '5566778899', atasNama: 'Budi Santoso', jumlah: 150000 },
+      { id: '1', uraian: 'Transport rapat', kategori: 'Perjalanan Dinas', bankCode: '004', bankName: 'Bank BNI', rekening: '5566778899', atasNama: 'Budi Santoso', jumlah: 150000 },
     ],
     total: 150000,
     status: 'draft',
