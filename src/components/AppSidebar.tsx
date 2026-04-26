@@ -9,6 +9,7 @@ import {
   Landmark,
   UserCog,
   ShieldCheck,
+  HardDriveDownload,
 } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import {
@@ -38,6 +39,7 @@ const menuItems = [
   { title: "Anggota", url: "/anggota", icon: Users, roles: ["admin"] as AppRole[] },
   { title: "Manajemen User", url: "/manajemen-user", icon: UserCog, roles: ["admin"] as AppRole[] },
   { title: "Audit Admin", url: "/audit-admin", icon: ShieldCheck, roles: ["admin"] as AppRole[] },
+  { title: "Backup & Restore", url: "/backup-restore", icon: HardDriveDownload, roles: ["admin"] as AppRole[] },
 ];
 
 export function AppSidebar() {
@@ -54,13 +56,21 @@ export function AppSidebar() {
     >
       <SidebarHeader className="p-4">
         <div className="flex items-center gap-3">
-          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-sidebar-primary">
-            <BarChart3 className="h-5 w-5 text-sidebar-primary-foreground" />
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white/10 overflow-hidden">
+            <img
+              src="/logo-hiswana-512.png"
+              alt="Hiswana Migas"
+              className="h-8 w-8 object-contain"
+              onError={(e) => {
+                (e.currentTarget as HTMLImageElement).style.display = "none";
+                (e.currentTarget.parentElement as HTMLElement).innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg>';
+              }}
+            />
           </div>
           {!collapsed && (
             <div>
-              <h2 className="text-sm font-bold text-sidebar-primary-foreground">DPC BANTEN HISWANA MIGAS</h2>
-              <p className="text-xs text-sidebar-foreground/60">Manajemen Keuangan</p>
+              <h2 className="text-sm font-bold text-sidebar-primary-foreground leading-tight">HISWANA MIGAS</h2>
+              <p className="text-xs text-sidebar-foreground/60 leading-tight">DPC Banten — Keuangan</p>
             </div>
           )}
         </div>

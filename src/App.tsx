@@ -23,6 +23,7 @@ const Laporan = lazy(() => import("./pages/Laporan"));
 const RekapIuran = lazy(() => import("./pages/RekapIuran"));
 const RekapIuranSeluruhAnggota = lazy(() => import("./pages/RekapIuranSeluruhAnggota"));
 const RekonsiliasiBank = lazy(() => import("./pages/RekonsiliasiBank"));
+const BackupRestore = lazy(() => import("./pages/BackupRestore"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 
 const queryClient = new QueryClient();
@@ -84,6 +85,7 @@ function AdminBendaharaRoutes() {
                 <Route path="/anggota" element={<RequireRole roles={["admin"]}><Anggota /></RequireRole>} />
                 <Route path="/manajemen-user" element={<RequireRole roles={["admin"]}><ManajemenUser /></RequireRole>} />
                 <Route path="/audit-admin" element={<RequireRole roles={["admin"]}><AuditAdmin /></RequireRole>} />
+                <Route path="/backup-restore" element={<RequireRole roles={["admin"]}><BackupRestore /></RequireRole>} />
 
                 <Route path="*" element={<NotFound />} />
               </Routes>
