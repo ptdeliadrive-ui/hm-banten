@@ -83,6 +83,47 @@ function formatDateID(date: Date) {
   return `${date.getDate()} ${MONTHS[date.getMonth()]} ${date.getFullYear()}`;
 }
 
+// ── Warna brand Hiswana ──────────────────────────────────────────────
+const COLOR_HEADER_BG   = "FF003087"; // biru tua
+const COLOR_HEADER_FG   = "FFFFFFFF"; // putih
+const COLOR_SUBHEADER   = "FF1F5EBF"; // biru medium
+const COLOR_SALDO_BG    = "FFD6E4F7"; // biru muda
+const COLOR_TOTAL_BG    = "FFFCE4D6"; // oranye muda
+const COLOR_STRIPE      = "FFF0F5FF"; // biru sangat muda (stripe genap)
+const COLOR_BORDER      = "FFB0C4DE"; // biru abu-abu
+
+type ExcelCell = {
+  font?: Partial<{ bold: boolean; color: { argb: string }; size: number; name: string }>;
+  fill?: { type: "pattern"; pattern: "solid"; fgColor: { argb: string } };
+  alignment?: Partial<{ horizontal: string; vertical: string; wrapText: boolean }>;
+  border?: {
+    top?: { style: string; color?: { argb: string } };
+    left?: { style: string; color?: { argb: string } };
+    bottom?: { style: string; color?: { argb: string } };
+    right?: { style: string; color?: { argb: string } };
+  };
+  numFmt?: string;
+  value?: unknown;
+};
+
+function applyBorder(cell: ExcelCell) {
+  const thin = { style: "thin", color: { argb: COLOR_BORDER } };
+  cell.border = { top: thin, left: thin, bottom: thin, right: thin };
+}
+
+function styleHeaderCell(cell: ExcelCell) {
+  cell.font = { bold: true, color: { argb: COLOR_HEADER_FG }, size: 10, name: "Arial" };
+  cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: COLOR_HEADER_BG } };
+  cell.alignment = { horizontal: "center", vertical: "middle", wrapText: true };
+  applyBorder(cell);
+}
+
+function styleDataCell(cell: ExcelCell, stripe: boolean) {
+  if (stripe) cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: COLOR_STRIPE } };
+  cell.font = { size: 10, name: "Arial" };
+  applyBorder(cell);
+}
+
 async function exportRowsToExcel(params: {
   periodLabel: string;
   rows: ReportRow[];
@@ -96,46 +137,140 @@ async function exportRowsToExcel(params: {
 }) {
   const { Workbook } = await import("exceljs");
   const workbook = new Workbook();
-  const ws = workbook.addWorksheet("Laporan");
+  workbook.creator = "Hiswana Migas DPC Banten";
+  workbook.created = new Date();
 
-  ws.addRow(["DATA REALISASI PEMASUKAN DAN PENGELUARAN"]);
-  ws.addRow(["DPC HISWANA MIGAS BANTEN"]);
-  ws.addRow([`Periode ${params.periodLabel}`]);
-  ws.addRow([]);
+  // ── Sheet 1: Laporan ─────────────────────────────────────────────────
+  const ws = workbook.addWorksheet("Laporan Keuangan");
+  ws.views = [{ state: "frozen", ySplit: 7 }];
 
-  ws.addRow(["No", "Uraian", "Pemasukan (Debet)", "Pengeluaran (Kredit)"]);
+  ws.columns = [
+    { width: 6 },
+    { width: 46 },
+    { width: 22 },
+    { width: 22 },
+  ];
 
-  const startSaldoDate = new Date(params.periodStart.getTime() - 24 * 60 * 60 * 1000);
-  ws.addRow([
-    1,
-    `Saldo per ${formatDateID(startSaldoDate)}`,
-    params.saldoAwal >= 0 ? params.saldoAwal : null,
-    params.saldoAwal < 0 ? Math.abs(params.saldoAwal) : null,
-  ]);
+  // Kop organisasi
+  ws.mergeCells("A1:D1");
+  const titleOrg = ws.getCell("A1");
+  titleOrg.value = "HIMPUNAN WIRASWASTA NASIONAL MINYAK DAN GAS BUMI";
+  titleOrg.font = { bold: true, size: 13, name: "Arial", color: { argb: COLOR_HEADER_BG } };
+  titleOrg.alignment = { horizontal: "center", vertical: "middle" };
 
-  params.rows.forEach((r, idx) => {
-    ws.addRow([idx + 2, r.uraian, r.pemasukan || null, r.pengeluaran || null]);
+  ws.mergeCells("A2:D2");
+  const titleDpc = ws.getCell("A2");
+  titleDpc.value = "DEWAN PIMPINAN CABANG BANTEN (HISWANA MIGAS)";
+  titleDpc.font = { bold: true, size: 11, name: "Arial", color: { argb: COLOR_HEADER_BG } };
+  titleDpc.alignment = { horizontal: "center", vertical: "middle" };
+
+  ws.mergeCells("A3:D3");
+  const titleAddr = ws.getCell("A3");
+  titleAddr.value = "Jl. Yusuf Martadilaga No. 42 Serang  |  Telp. (0254) 201453  |  Email: migasbanten@yahoo.com";
+  titleAddr.font = { size: 9, name: "Arial" };
+  titleAddr.alignment = { horizontal: "center", vertical: "middle" };
+
+  // Garis pembatas bawah kop
+  ws.mergeCells("A4:D4");
+  const borderRow = ws.getCell("A4");
+  borderRow.fill = { type: "pattern", pattern: "solid", fgColor: { argb: COLOR_HEADER_BG } };
+  ws.getRow(4).height = 3;
+
+  ws.mergeCells("A5:D5");
+
+  // Judul laporan
+  ws.mergeCells("A6:D6");
+  const titleLaporan = ws.getCell("A6");
+  titleLaporan.value = `DATA REALISASI PEMASUKAN DAN PENGELUARAN — PERIODE ${params.periodLabel.toUpperCase()}`;
+  titleLaporan.font = { bold: true, size: 11, name: "Arial" };
+  titleLaporan.alignment = { horizontal: "center", vertical: "middle" };
+  titleLaporan.fill = { type: "pattern", pattern: "solid", fgColor: { argb: COLOR_SALDO_BG } };
+  ws.getRow(6).height = 20;
+
+  // Header tabel
+  const headerRow = ws.getRow(7);
+  headerRow.height = 22;
+  ["No", "Uraian", "Pemasukan (Debet)", "Pengeluaran (Kredit)"].forEach((v, i) => {
+    const cell = headerRow.getCell(i + 1);
+    cell.value = v;
+    styleHeaderCell(cell as unknown as ExcelCell);
   });
 
-  ws.addRow([
-    params.rows.length + 2,
-    "Saldo akhir periode",
-    params.saldoAkhir >= 0 ? params.saldoAkhir : null,
-    params.saldoAkhir < 0 ? Math.abs(params.saldoAkhir) : null,
-  ]);
-  ws.addRow(["", "Total Mutasi Periode", params.totalIncome, params.totalExpense]);
+  // Baris saldo awal
+  let rowNum = 8;
+  const startSaldoDate = new Date(params.periodStart.getTime() - 24 * 60 * 60 * 1000);
+  const saldoAwalRow = ws.getRow(rowNum);
+  saldoAwalRow.getCell(1).value = 1;
+  saldoAwalRow.getCell(2).value = `Saldo per ${formatDateID(startSaldoDate)}`;
+  saldoAwalRow.getCell(3).value = params.saldoAwal >= 0 ? params.saldoAwal : null;
+  saldoAwalRow.getCell(4).value = params.saldoAwal < 0 ? Math.abs(params.saldoAwal) : null;
+  [1, 2, 3, 4].forEach((c) => {
+    const cell = saldoAwalRow.getCell(c);
+    cell.font = { bold: true, size: 10, name: "Arial" };
+    cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: COLOR_SALDO_BG } };
+    applyBorder(cell as unknown as ExcelCell);
+  });
+  saldoAwalRow.getCell(3).numFmt = "#,##0";
+  saldoAwalRow.getCell(4).numFmt = "#,##0";
+  rowNum++;
 
-  ws.getColumn(1).width = 8;
-  ws.getColumn(2).width = 42;
-  ws.getColumn(3).width = 24;
-  ws.getColumn(4).width = 24;
+  // Baris data
+  params.rows.forEach((r, idx) => {
+    const dataRow = ws.getRow(rowNum);
+    const stripe = idx % 2 === 1;
+    dataRow.getCell(1).value = idx + 2;
+    dataRow.getCell(2).value = r.uraian;
+    dataRow.getCell(3).value = r.pemasukan || null;
+    dataRow.getCell(4).value = r.pengeluaran || null;
+    [1, 2, 3, 4].forEach((c) => {
+      styleDataCell(dataRow.getCell(c) as unknown as ExcelCell, stripe);
+    });
+    dataRow.getCell(1).alignment = { horizontal: "center", vertical: "middle" };
+    dataRow.getCell(2).alignment = { horizontal: "left", vertical: "middle" };
+    dataRow.getCell(3).numFmt = "#,##0";
+    dataRow.getCell(3).alignment = { horizontal: "right", vertical: "middle" };
+    dataRow.getCell(4).numFmt = "#,##0";
+    dataRow.getCell(4).alignment = { horizontal: "right", vertical: "middle" };
+    rowNum++;
+  });
 
-  ws.getColumn(3).numFmt = "#,##0";
-  ws.getColumn(4).numFmt = "#,##0";
+  // Baris saldo akhir
+  const saldoAkhirRow = ws.getRow(rowNum);
+  saldoAkhirRow.getCell(1).value = params.rows.length + 2;
+  saldoAkhirRow.getCell(2).value = "Saldo akhir periode";
+  saldoAkhirRow.getCell(3).value = params.saldoAkhir >= 0 ? params.saldoAkhir : null;
+  saldoAkhirRow.getCell(4).value = params.saldoAkhir < 0 ? Math.abs(params.saldoAkhir) : null;
+  [1, 2, 3, 4].forEach((c) => {
+    const cell = saldoAkhirRow.getCell(c);
+    cell.font = { bold: true, size: 10, name: "Arial" };
+    cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: COLOR_SALDO_BG } };
+    applyBorder(cell as unknown as ExcelCell);
+  });
+  saldoAkhirRow.getCell(3).numFmt = "#,##0";
+  saldoAkhirRow.getCell(4).numFmt = "#,##0";
+  rowNum++;
 
+  // Baris total
+  const totalRow = ws.getRow(rowNum);
+  totalRow.getCell(2).value = "TOTAL MUTASI PERIODE";
+  totalRow.getCell(3).value = params.totalIncome;
+  totalRow.getCell(4).value = params.totalExpense;
+  [1, 2, 3, 4].forEach((c) => {
+    const cell = totalRow.getCell(c);
+    cell.font = { bold: true, size: 10, name: "Arial", color: { argb: "FF000000" } };
+    cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: COLOR_TOTAL_BG } };
+    applyBorder(cell as unknown as ExcelCell);
+  });
+  totalRow.getCell(2).alignment = { horizontal: "right", vertical: "middle" };
+  totalRow.getCell(3).numFmt = "#,##0";
+  totalRow.getCell(3).alignment = { horizontal: "right", vertical: "middle" };
+  totalRow.getCell(4).numFmt = "#,##0";
+  totalRow.getCell(4).alignment = { horizontal: "right", vertical: "middle" };
+
+  // ── Sheet 2: Detail Pemasukan ─────────────────────────────────────────
   const detailWs = workbook.addWorksheet("Detail Pemasukan");
+  detailWs.views = [{ state: "frozen", ySplit: 5 }];
 
-  // Collect all unique keterangan texts to use as pivot column headers.
   const uniqueKetSet = new Set<string>();
   params.incomeDetails.forEach((row) => {
     row.keteranganList.forEach((k) => {
@@ -143,14 +278,46 @@ async function exportRowsToExcel(params: {
     });
   });
   const uniqueKetHeaders = [...uniqueKetSet];
+  const totalCols = 6 + uniqueKetHeaders.length;
 
-  detailWs.addRow(["DETAIL PEMASUKAN"]);
-  detailWs.addRow([`Periode ${params.periodLabel}`]);
-  detailWs.addRow([]);
-  detailWs.addRow(["No", "Tanggal", "Anggota", "Bulan", "Tahun", "Jumlah", ...uniqueKetHeaders]);
+  detailWs.columns = [
+    { width: 6 },
+    { width: 16 },
+    { width: 36 },
+    { width: 14 },
+    { width: 8 },
+    { width: 18 },
+    ...uniqueKetHeaders.map(() => ({ width: 22 })),
+  ];
 
+  // Kop sheet 2
+  detailWs.mergeCells(1, 1, 1, totalCols);
+  const detailTitle = detailWs.getCell("A1");
+  detailTitle.value = "HIMPUNAN WIRASWASTA NASIONAL MINYAK DAN GAS BUMI — DPC BANTEN";
+  detailTitle.font = { bold: true, size: 12, name: "Arial", color: { argb: COLOR_HEADER_BG } };
+  detailTitle.alignment = { horizontal: "center", vertical: "middle" };
+
+  detailWs.mergeCells(2, 1, 2, totalCols);
+  const detailSub = detailWs.getCell("A2");
+  detailSub.value = `DETAIL PEMASUKAN — PERIODE ${params.periodLabel.toUpperCase()}`;
+  detailSub.font = { bold: true, size: 10, name: "Arial" };
+  detailSub.alignment = { horizontal: "center", vertical: "middle" };
+  detailSub.fill = { type: "pattern", pattern: "solid", fgColor: { argb: COLOR_SALDO_BG } };
+
+  detailWs.mergeCells(3, 1, 3, totalCols);
+  detailWs.getRow(3).height = 6;
+
+  // Header detail
+  const detailHeader = detailWs.getRow(4);
+  detailHeader.height = 22;
+  ["No", "Tanggal", "Anggota", "Bulan", "Tahun", "Jumlah", ...uniqueKetHeaders].forEach((v, i) => {
+    const cell = detailHeader.getCell(i + 1);
+    cell.value = v;
+    styleHeaderCell(cell as unknown as ExcelCell);
+  });
+
+  let dRowNum = 5;
   params.incomeDetails.forEach((item, idx) => {
-    // Build a map of keterangan text -> nominal for this row.
     const ketMap = new Map<string, number>();
     item.keteranganList.forEach((k) => {
       if (k.text) {
@@ -159,33 +326,39 @@ async function exportRowsToExcel(params: {
       }
     });
 
-    detailWs.addRow([
-      idx + 1,
-      item.tanggal,
-      item.anggota,
-      item.bulan,
-      item.tahun,
-      item.jumlah,
-      ...uniqueKetHeaders.map((header) => ketMap.get(header) || null),
-    ]);
+    const dRow = detailWs.getRow(dRowNum);
+    const stripe = idx % 2 === 1;
+    dRow.getCell(1).value = idx + 1;
+    dRow.getCell(2).value = item.tanggal;
+    dRow.getCell(3).value = item.anggota;
+    dRow.getCell(4).value = item.bulan;
+    dRow.getCell(5).value = item.tahun;
+    dRow.getCell(6).value = item.jumlah;
+    uniqueKetHeaders.forEach((h, hi) => {
+      dRow.getCell(7 + hi).value = ketMap.get(h) || null;
+    });
+
+    for (let c = 1; c <= totalCols; c++) {
+      styleDataCell(dRow.getCell(c) as unknown as ExcelCell, stripe);
+    }
+    dRow.getCell(1).alignment = { horizontal: "center", vertical: "middle" };
+    dRow.getCell(3).alignment = { horizontal: "left", vertical: "middle" };
+    dRow.getCell(6).numFmt = "#,##0";
+    dRow.getCell(6).alignment = { horizontal: "right", vertical: "middle" };
+    uniqueKetHeaders.forEach((_, hi) => {
+      dRow.getCell(7 + hi).numFmt = "#,##0";
+      dRow.getCell(7 + hi).alignment = { horizontal: "right", vertical: "middle" };
+    });
+    dRowNum++;
   });
 
   if (params.incomeDetails.length === 0) {
-    detailWs.addRow(["", "", "Tidak ada data pemasukan untuk periode ini"]);
+    detailWs.mergeCells(dRowNum, 1, dRowNum, totalCols);
+    detailWs.getCell(dRowNum, 1).value = "Tidak ada data pemasukan untuk periode ini";
+    detailWs.getCell(dRowNum, 1).alignment = { horizontal: "center", vertical: "middle" };
   }
 
-  detailWs.getColumn(1).width = 8;
-  detailWs.getColumn(2).width = 16;
-  detailWs.getColumn(3).width = 36;
-  detailWs.getColumn(4).width = 14;
-  detailWs.getColumn(5).width = 12;
-  detailWs.getColumn(6).width = 18;
-  uniqueKetHeaders.forEach((_, i) => {
-    detailWs.getColumn(7 + i).width = 24;
-    detailWs.getColumn(7 + i).numFmt = "#,##0";
-  });
-  detailWs.getColumn(6).numFmt = "#,##0";
-
+  // ── Generate file ────────────────────────────────────────────────────
   const buffer = await workbook.xlsx.writeBuffer();
   const blob = new Blob([buffer], {
     type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
@@ -476,32 +649,55 @@ const Laporan = () => {
         ref={printRef}
         className="bg-white text-black mx-auto max-w-[210mm] min-h-[297mm] p-6 print:p-5 print:max-w-none print:min-h-0"
       >
-        <div className="text-center mb-3">
-          <p className="font-bold text-sm">DATA REALISASI PEMASUKAN DAN PENGELUARAN</p>
-          <p className="font-bold text-sm">DPC HISWANA MIGAS BANTEN</p>
+        {/* ── Kop Surat ── */}
+        <div className="flex items-center gap-4 mb-1">
+          <img
+            src="/logo-hiswana-512.png"
+            alt="Logo Hiswana Migas"
+            className="h-16 w-16 object-contain print:h-14 print:w-14"
+            onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = "none"; }}
+          />
+          <div className="flex-1 text-center">
+            <p className="font-extrabold text-base leading-tight tracking-wide">HIMPUNAN WIRASWASTA NASIONAL MINYAK DAN GAS BUMI</p>
+            <p className="font-bold text-sm leading-tight">DEWAN PIMPINAN CABANG BANTEN</p>
+            <p className="text-xs text-gray-600 mt-0.5">Jl. Yusuf Martadilaga No. 42 Serang  |  Telp. (0254) 201453  |  migasbanten@yahoo.com</p>
+          </div>
+        </div>
+        <div className="border-t-4 border-black mb-0.5" />
+        <div className="border-t border-black mb-3" />
+
+        {/* ── Judul Laporan ── */}
+        <div className="text-center mb-4">
+          <p className="font-bold text-sm uppercase tracking-wider">Data Realisasi Pemasukan dan Pengeluaran</p>
           <p className="text-sm">Periode {periodLabel}</p>
         </div>
 
         <div className="overflow-x-auto">
-          <table className="w-full border-collapse text-xs">
+          <style>{`
+            @media print {
+              .laporan-table { width: 100%; border-collapse: collapse !important; }
+              .laporan-table th, .laporan-table td { border: 1px solid black !important; }
+            }
+          `}</style>
+          <table className="laporan-table w-full border-collapse text-xs">
             <thead>
-              <tr>
-                <th className="border border-black px-2 py-1 w-10 text-center">No.</th>
-                <th className="border border-black px-2 py-1 text-center tracking-[0.2em]">URAIAN</th>
-                <th className="border border-black px-2 py-1 w-40 text-center">PEMASUKAN (DEBET)</th>
-                <th className="border border-black px-2 py-1 w-40 text-center">PENGELUARAN (KREDIT)</th>
+              <tr className="bg-gray-100">
+                <th className="border border-black px-2 py-1.5 w-10 text-center font-bold">No.</th>
+                <th className="border border-black px-2 py-1.5 text-center font-bold tracking-wide">URAIAN</th>
+                <th className="border border-black px-2 py-1.5 w-40 text-center font-bold">PEMASUKAN (DEBET)</th>
+                <th className="border border-black px-2 py-1.5 w-40 text-center font-bold">PENGELUARAN (KREDIT)</th>
               </tr>
             </thead>
             <tbody>
-              <tr>
-                <td className="border border-black px-2 py-1 text-center">1</td>
-                <td className="border border-black px-2 py-1">Saldo per {formatDateID(new Date(period.start.getTime() - 24 * 60 * 60 * 1000))}</td>
-                <td className="border border-black px-2 py-1 text-right">{report.saldoAwal >= 0 ? formatCurrency(report.saldoAwal) : "-"}</td>
-                <td className="border border-black px-2 py-1 text-right">{report.saldoAwal < 0 ? formatCurrency(Math.abs(report.saldoAwal)) : "-"}</td>
+              <tr className="bg-blue-50">
+                <td className="border border-black px-2 py-1 text-center font-semibold">1</td>
+                <td className="border border-black px-2 py-1 font-semibold">Saldo per {formatDateID(new Date(period.start.getTime() - 24 * 60 * 60 * 1000))}</td>
+                <td className="border border-black px-2 py-1 text-right font-semibold">{report.saldoAwal >= 0 ? formatCurrency(report.saldoAwal) : "-"}</td>
+                <td className="border border-black px-2 py-1 text-right font-semibold">{report.saldoAwal < 0 ? formatCurrency(Math.abs(report.saldoAwal)) : "-"}</td>
               </tr>
 
               {report.rows.map((row, idx) => (
-                <tr key={`${row.uraian}-${idx}`}>
+                <tr key={`${row.uraian}-${idx}`} className={idx % 2 === 1 ? "bg-gray-50" : ""}>
                   <td className="border border-black px-2 py-1 text-center">{idx + 2}</td>
                   <td className="border border-black px-2 py-1">{row.uraian}</td>
                   <td className="border border-black px-2 py-1 text-right">{row.pemasukan > 0 ? formatCurrency(row.pemasukan) : "-"}</td>
@@ -509,17 +705,17 @@ const Laporan = () => {
                 </tr>
               ))}
 
-              <tr className="font-semibold">
+              <tr className="bg-blue-50 font-semibold">
                 <td className="border border-black px-2 py-1 text-center">{report.rows.length + 2}</td>
                 <td className="border border-black px-2 py-1">Saldo akhir periode</td>
                 <td className="border border-black px-2 py-1 text-right">{report.saldoAkhir >= 0 ? formatCurrency(report.saldoAkhir) : "-"}</td>
                 <td className="border border-black px-2 py-1 text-right">{report.saldoAkhir < 0 ? formatCurrency(Math.abs(report.saldoAkhir)) : "-"}</td>
               </tr>
 
-              <tr className="font-bold">
-                <td className="border border-black px-2 py-1 text-right" colSpan={2}>Total</td>
-                <td className="border border-black px-2 py-1 text-right">{formatCurrency(report.totalIncome)}</td>
-                <td className="border border-black px-2 py-1 text-right">{formatCurrency(report.totalExpense)}</td>
+              <tr className="font-bold bg-orange-50">
+                <td className="border border-black px-2 py-1.5 text-right" colSpan={2}>TOTAL MUTASI PERIODE</td>
+                <td className="border border-black px-2 py-1.5 text-right">{formatCurrency(report.totalIncome)}</td>
+                <td className="border border-black px-2 py-1.5 text-right">{formatCurrency(report.totalExpense)}</td>
               </tr>
             </tbody>
           </table>

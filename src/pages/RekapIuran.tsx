@@ -836,6 +836,25 @@ const RekapIuran = () => {
         ref={reportRef}
         className="space-y-4 bg-white text-black p-4 max-w-[297mm] mx-auto font-sans text-[11px] leading-relaxed print:p-0 print:text-[10px]"
       >
+      {/* ── Kop Surat (muncul di print) ── */}
+      <div className="hidden print:block mb-2">
+        <div className="flex items-center gap-3 mb-1">
+          <img
+            src="/logo-hiswana-512.png"
+            alt="Logo"
+            className="h-14 w-14 object-contain"
+            onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = "none"; }}
+          />
+          <div className="flex-1 text-center">
+            <p className="font-extrabold text-[13px] leading-tight tracking-wide">HIMPUNAN WIRASWASTA NASIONAL MINYAK DAN GAS BUMI</p>
+            <p className="font-bold text-[11px]">DEWAN PIMPINAN CABANG BANTEN (HISWANA MIGAS)</p>
+            <p className="text-[9px] text-gray-600 mt-0.5">Jl. Yusuf Martadilaga No. 42 Serang  |  Telp. (0254) 201453  |  migasbanten@yahoo.com</p>
+          </div>
+        </div>
+        <div className="border-t-4 border-black mb-0.5" />
+        <div className="border-t border-black mb-2" />
+      </div>
+
       <div className="space-y-1 text-center">
         <h1 className="text-xl font-bold tracking-tight md:text-2xl">
           REKAP PENERIMAAN IURAN TF DAN IURAN HISWANA

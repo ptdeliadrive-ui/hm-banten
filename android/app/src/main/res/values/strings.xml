@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Hiswana Banten</string>
+    <string name="title_activity_main">Hiswana Banten</string>
+    <string name="package_name">com.hiswanabanten.keuangan</string>
+    <string name="custom_url_scheme">com.hiswanabanten.keuangan</string>
+</resources>
