@@ -24,7 +24,8 @@ const Anggota = () => {
 
   const filtered = members.filter(m =>
     m.namaPT.toLowerCase().includes(search.toLowerCase()) ||
-    m.wilayah.toLowerCase().includes(search.toLowerCase())
+    m.wilayah.toLowerCase().includes(search.toLowerCase()) ||
+    (m.noSPBU || '').toLowerCase().includes(search.toLowerCase())
   );
 
   const handleAdd = (e: React.FormEvent<HTMLFormElement>) => {
@@ -204,7 +205,7 @@ const Anggota = () => {
         <CardContent className="p-5">
           <div className="flex items-center gap-2 mb-4">
             <Search className="h-4 w-4 text-muted-foreground" />
-            <Input placeholder="Cari nama PT atau wilayah..." value={search} onChange={e => setSearch(e.target.value)} className="max-w-sm" />
+            <Input placeholder="Cari nama PT, wilayah, atau No. SPBU..." value={search} onChange={e => setSearch(e.target.value)} className="max-w-sm" />
           </div>
           <Table>
             <TableHeader>

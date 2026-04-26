@@ -200,6 +200,7 @@ const RekapIuranSeluruhAnggota = () => {
         return {
           id: member.id,
           namaPT: member.namaPT,
+          noSPBU: member.noSPBU || null,
           wilayah: member.wilayah || "-",
           bidangUsaha: member.bidangUsaha || "-",
           memberStatus: member.status,
@@ -219,7 +220,8 @@ const RekapIuranSeluruhAnggota = () => {
         return (
           row.namaPT.toLowerCase().includes(keyword) ||
           row.wilayah.toLowerCase().includes(keyword) ||
-          row.bidangUsaha.toLowerCase().includes(keyword)
+          row.bidangUsaha.toLowerCase().includes(keyword) ||
+          (row.noSPBU || '').toLowerCase().includes(keyword)
         );
       });
   }, [bidangUsahaFilter, incomes, members, search, year]);
@@ -343,7 +345,12 @@ const RekapIuranSeluruhAnggota = () => {
                   rows.map((row, index) => (
                     <tr key={row.id} className="hover:bg-muted/20">
                       <td className="border px-3 py-2">{index + 1}</td>
-                      <td className="border px-3 py-2 font-medium">{row.namaPT}</td>
+                      <td className="border px-3 py-2 font-medium">
+                          {row.namaPT}
+                          {row.noSPBU && row.bidangUsaha.toLowerCase().includes('spbu') && (
+                            <div className="text-xs text-muted-foreground font-normal">No. SPBU: {row.noSPBU}</div>
+                          )}
+                        </td>
                       <td className="border px-3 py-2">{row.wilayah}</td>
                       <td className="border px-3 py-2">{row.bidangUsaha}</td>
                       <td className="border px-3 py-2 text-center">
